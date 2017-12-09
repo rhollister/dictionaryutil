@@ -6,7 +6,8 @@ For example, rather than displaying a unique id as `d86d41a993da2ff7a6136c0e3f1f
 
 ## Sample output from DictionaryGenerator: 
 
-```Obscene words loaded: 1012
+```
+Obscene words loaded: 1012
 All words read:       1171988
 Big words ignored:    204586
 Weird words ignored:  88521
@@ -35,7 +36,8 @@ Sample words:
 
 ## Sample output from DictionaryMask:
 
-```MD5 hashes:
+```
+MD5 hashes:
 d41d8cd98f00b204e9800998ecf8427e -> Alutaceous Honold 3WV
 9f6290f4436e5a2351f12e03b6433c3c -> Bellinger Iain GS6
 feb0fc2091ac843ab3af3a080527da23 -> Cellager Buffed 4PA
