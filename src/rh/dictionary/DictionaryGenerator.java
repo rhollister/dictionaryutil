@@ -5,6 +5,7 @@ import java.io.BufferedWriter;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -61,9 +62,9 @@ public final class DictionaryGenerator {
 	 * Load words from every file from /resources/dictionary_words and filter it
 	 * by /resources/allObscene.txt, and output suitable words to
 	 * src/com/novetta/era/rest/util/dictionary.txt
+	 * @throws IOException 
 	 */
-	private static void generateWordList() {
-		HashSet<String> obsceneSet = new HashSet<>();
+	private static void generateWordList() throws IOException {
 		FileInputStream fstream;
 		TreeSet<String> wordSet = new TreeSet<>(new Comparator<String>() {
 			@Override
@@ -74,204 +75,221 @@ public final class DictionaryGenerator {
 				return s1.length() - s2.length();
 			}
 		});
-		try {
-			try {
-				fstream = new FileInputStream(new File(
-						"resources/allObscene.txt"));
+		
+		HashSet<String> obsceneSet = loadObsceneWords();
 
+		String avoidPatternStr = loadRareConsonantClusters();
+
+		File directory = new File("resources/dictionary_words");
+		File[] files = directory.listFiles();
+		// counters for statistics
+		int allWordsCount = 0, possibleCount = 0, obsceneCount = 0, duplicateCount = 0, bigWordsCount = 0, avoidCount = 0;
+		Pattern vowels = Pattern.compile("a|e|i|o|u");
+		Pattern vowelsy = Pattern.compile("a|e|i|o|u|y");
+
+		// list of letter combinations to avoid, these are usually foreign
+		// or very archaic words
+		Pattern avoid = Pattern.compile(avoidPatternStr);
+		Pattern consonants = Pattern.compile("[qwrtpsdfghjklzxcvbnm]");
+		Pattern manyConsonants = Pattern
+				.compile("[qwrtpsdfghjklzxcvbnm][qwrtpsdfghjklzxcvbnm][qwrtpsdfghjklzxcvbnm][qwrtpsdfghjklzxcvbnm]");
+
+		Pattern nonAlphanumeric = Pattern.compile("[^a-z0-9]");
+		Pattern pattern = Pattern
+				.compile("\\p{InCombiningDiacriticalMarks}+");
+
+		System.out.println("Processing dictionary files...");
+
+		// loop through all of the word lists in this directory
+		for (File file : files) {
+				System.out.println(" " + file.getName());
+				fstream = new FileInputStream(file);
 				DataInputStream in = new DataInputStream(fstream);
 				BufferedReader br = new BufferedReader(
 						new InputStreamReader(in));
-				Pattern pattern = Pattern
-						.compile("\\p{InCombiningDiacriticalMarks}+");
 				String strLine;
-				// read in the obscene words
+				// read all lines in this file
 				while ((strLine = br.readLine()) != null) {
-					// only read words longer than two characters
-					if (strLine.length() > 2) {
-						// replace any accented characters with their English
-						// counterparts
-						String nfdNormalizedString = Normalizer.normalize(
-								strLine, Normalizer.Form.NFD);
-						strLine = pattern.matcher(nfdNormalizedString)
-								.replaceAll("");
-						// remove any whitespace and add it to the obscene list
-						if (obsceneSet.add(strLine.trim().toLowerCase()
-								.replaceAll(" ", ""))) {
+					allWordsCount++;
+					// remove any apostrophes
+					strLine = strLine.replaceAll("'", "");
+					// ensure the word is a decent length
+					if (strLine.length() > 11 || strLine.length() < 3) {
+						bigWordsCount++;
+						continue;
+					}
+					
+					// replace any accented characters with their
+					// English counterparts
+					String nfdNormalizedString = Normalizer.normalize(
+							strLine, Normalizer.Form.NFD);
+					strLine = pattern.matcher(nfdNormalizedString)
+							.replaceAll("");
+
+					// check to see if this word contains any non-ascii
+					boolean ascii = true;
+					for (int c = 0; c < strLine.length(); c++) {
+						if (strLine.charAt(c) > 127) {
+							ascii = false;
+						}
+					}
+					
+					// if this word is only ascii
+					if (!ascii) {
+						continue;
+					}
+					strLine = strLine.trim().toLowerCase();
+
+					// skip this word if it contains letters we're
+					// trying to avoid
+					if (avoid.matcher(strLine).find()) {
+						avoidCount++;
+						continue;
+					}
+
+					// remove any non-alphanumeric characters
+					strLine = nonAlphanumeric.matcher(strLine)
+							.replaceAll("");
+					// make sure this word has vowels
+					boolean hasVowels = true;
+					if (strLine.length() > 3) {
+						hasVowels = vowels.matcher(strLine)
+								.find();
+					} else {
+						hasVowels = vowelsy.matcher(strLine)
+								.find();
+					}
+					// make sure this word has consonants too
+					if (!(hasVowels
+							&& consonants.matcher(strLine)
+									.find()
+							&& !manyConsonants.matcher(strLine)
+									.find())) {
+						continue;
+					}
+					
+					possibleCount++;
+					if (wordSet.contains(strLine)) {
+						duplicateCount++;
+					} else {
+						// make sure this word doesn't
+						// contain any obscene words
+						boolean obscene = false;
+						for (String ob : obsceneSet) {
+							if (strLine.contains(ob)) {
+								obscene = true;
+								break;
+							}
+						}
+						if (!obscene
+								&& !obsceneSet
+										.contains(strLine)) {
+							// finally, add this word
+							wordSet.add(strLine);
+						} else {
+							obsceneCount++;
 						}
 					}
 				}
-				br.close();
-				fstream.close();
-			} catch (IOException e1) {
-				e1.printStackTrace();
+				
+				// Close the input stream
+				in.close();
+		}
+		
+		System.out.println("Obscene words loaded: " + obsceneSet.size());
+		System.out.println("All words read:       " + allWordsCount);
+		System.out.println("Big words ignored:    " + bigWordsCount);
+		System.out.println("Weird words ignored:  " + avoidCount);
+		System.out.println("Possible words read:  " + possibleCount);
+		System.out.println("Duplicates:           " + duplicateCount);
+		System.out.println("Obscene words ignored:" + obsceneCount);
+		System.out.println("Dictionary capacity:  " + dictionary.length);
+		System.out.println("Final clean list:     " + wordSet.size());
+		System.out.println("-----------------------------");
+		if (dictionary.length > wordSet.size()) {
+			System.out.println("   *** WARNING ***    ");
+			System.out.println("Words needed:         "
+					+ (dictionary.length - wordSet.size()));
+		} else {
+			System.out.println("Extra unused words:   "
+					+ (wordSet.size() - dictionary.length));
+		}
+		
+		writeDictionary(wordSet);
+
+	}
+
+	private static void writeDictionary(TreeSet<String> wordSet) {
+		try ( // write the dictionary
+		BufferedWriter bw = new BufferedWriter(new FileWriter(
+				DICTIONARY_FILE))) {
+			for (String s : wordSet) {
+				bw.write(WordUtils.capitalize(s));
+				bw.write("\n");
 			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
 
-			// list of patterns to exclude
-			String avoidPatternStr = "sex|sht|aa|ae|yn|hn|dn|dm|vd|fm|kth|bj|ii|fs|jd|tj|sg|rz|sf|kj|kl|kh|mh|fh|oe|^ct|^dp|^ll|^py|sss|^bs|^gh|^ill|^my|^mz|^oo|^ox|cz|zc|j.?$|kk|f$";
-			try {
-				fstream = new FileInputStream(new File(
-						"resources/rareConsonantClusters.txt"));
+	private static String loadRareConsonantClusters() {
+		FileInputStream fstream;
+		// list of patterns to exclude
+		String avoidPatternStr = "sex|sht|aa|ae|yn|hn|dn|dm|vd|fm|kth|bj|ii|fs|jd|tj|sg|rz|sf|kj|kl|kh|mh|fh|oe|^ct|^dp|^ll|^py|sss|^bs|^gh|^ill|^my|^mz|^oo|^ox|cz|zc|j.?$|kk|f$";
+		try {
+			fstream = new FileInputStream(new File(
+					"resources/rareConsonantClusters.txt"));
 
-				DataInputStream in = new DataInputStream(fstream);
-				BufferedReader br = new BufferedReader(
-						new InputStreamReader(in));
-				String strLine;
-				while ((strLine = br.readLine()) != null) {
-					avoidPatternStr += "|" + strLine;
-				}
-				br.close();
-				fstream.close();
-			} catch (IOException e1) {
-				e1.printStackTrace();
+			DataInputStream in = new DataInputStream(fstream);
+			BufferedReader br = new BufferedReader(
+					new InputStreamReader(in));
+			String strLine;
+			while ((strLine = br.readLine()) != null) {
+				avoidPatternStr += "|" + strLine;
 			}
+			br.close();
+			fstream.close();
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+		return avoidPatternStr;
+	}
 
-			File directory = new File("resources/dictionary_words");
-			File[] files = directory.listFiles();
-			// counters for statistics
-			int allWordsCount = 0, possibleCount = 0, obsceneCount = 0, duplicateCount = 0, bigWordsCount = 0, avoidCount = 0;
-			Pattern vowels = Pattern.compile("a|e|i|o|u");
-			Pattern vowelsy = Pattern.compile("a|e|i|o|u|y");
+	private static HashSet<String> loadObsceneWords() {
+		HashSet<String> obsceneSet = new HashSet<>();
+		FileInputStream fstream;
+		try {
+			fstream = new FileInputStream(new File(
+					"resources/allObscene.txt"));
 
-			// list of letter combinations to avoid, these are usually foreign
-			// or very archaic words
-			Pattern avoid = Pattern.compile(avoidPatternStr);
-			Pattern consonants = Pattern.compile("[qwrtpsdfghjklzxcvbnm]");
-			Pattern manyConsonants = Pattern
-					.compile("[qwrtpsdfghjklzxcvbnm][qwrtpsdfghjklzxcvbnm][qwrtpsdfghjklzxcvbnm][qwrtpsdfghjklzxcvbnm]");
-
-			Pattern nonAlphanumeric = Pattern.compile("[^a-z0-9]");
+			DataInputStream in = new DataInputStream(fstream);
+			BufferedReader br = new BufferedReader(
+					new InputStreamReader(in));
 			Pattern pattern = Pattern
 					.compile("\\p{InCombiningDiacriticalMarks}+");
-
-			System.out.println("Processing dictionary files...");
-
-			// loop through all of the word lists in this directory
-			for (File file : files) {
-				try {
-					System.out.println(" " + file.getName());
-					fstream = new FileInputStream(file);
-					DataInputStream in = new DataInputStream(fstream);
-					BufferedReader br = new BufferedReader(
-							new InputStreamReader(in));
-					String strLine;
-					// read all lines in this file
-					while ((strLine = br.readLine()) != null) {
-						allWordsCount++;
-						// remove any apostrophes
-						strLine = strLine.replaceAll("'", "");
-						// ensure the word is a decent length
-						if (strLine.length() < 11 && strLine.length() > 2) {
-							// replace any accented characters with their
-							// English counterparts
-							String nfdNormalizedString = Normalizer.normalize(
-									strLine, Normalizer.Form.NFD);
-							strLine = pattern.matcher(nfdNormalizedString)
-									.replaceAll("");
-
-							// check to see if this word contains any non-ascii
-							boolean ascii = true;
-							for (int c = 0; c < strLine.length(); c++) {
-								if (strLine.charAt(c) > 127) {
-									ascii = false;
-								}
-							}
-							// if this word is only ascii
-							if (ascii) {
-								strLine = strLine.trim().toLowerCase();
-
-								// skip this word if it contains letters we're
-								// trying to avoid
-								if (!avoid.matcher(strLine).find()) {
-
-									// remove any non-alphanumeric characters
-									strLine = nonAlphanumeric.matcher(strLine)
-											.replaceAll("");
-									// make sure this word has vowels
-									boolean hasVowels = true;
-									if (strLine.length() > 3) {
-										hasVowels = vowels.matcher(strLine)
-												.find();
-									} else {
-										hasVowels = vowelsy.matcher(strLine)
-												.find();
-									}
-									// make sure this word has consonants too
-									if (hasVowels
-											&& consonants.matcher(strLine)
-													.find()
-											&& !manyConsonants.matcher(strLine)
-													.find()) {
-										possibleCount++;
-										if (wordSet.contains(strLine)) {
-											duplicateCount++;
-										} else {
-											// make sure this word doesn't
-											// contain any obscene words
-											boolean obscene = false;
-											for (String ob : obsceneSet) {
-												if (strLine.contains(ob)) {
-													obscene = true;
-													break;
-												}
-											}
-											if (!obscene
-													&& !obsceneSet
-															.contains(strLine)) {
-												// finally, add this word
-												wordSet.add(strLine);
-											} else {
-												obsceneCount++;
-											}
-										}
-									}
-								} else {
-									avoidCount++;
-								}
-							}
-						} else {
-							bigWordsCount++;
-						}
+			String strLine;
+			// read in the obscene words
+			while ((strLine = br.readLine()) != null) {
+				// only read words longer than two characters
+				if (strLine.length() > 2) {
+					// replace any accented characters with their English
+					// counterparts
+					String nfdNormalizedString = Normalizer.normalize(
+							strLine, Normalizer.Form.NFD);
+					strLine = pattern.matcher(nfdNormalizedString)
+							.replaceAll("");
+					// remove any whitespace and add it to the obscene list
+					if (obsceneSet.add(strLine.trim().toLowerCase()
+							.replaceAll(" ", ""))) {
 					}
-					// Close the input stream
-					in.close();
-				} catch (Exception e) {// Catch exception if any
-					System.err.println("Error: " + e.getMessage());
 				}
 			}
-			System.out.println("Obscene words loaded: " + obsceneSet.size());
-			System.out.println("All words read:       " + allWordsCount);
-			System.out.println("Big words ignored:    " + bigWordsCount);
-			System.out.println("Weird words ignored:  " + avoidCount);
-			System.out.println("Possible words read:  " + possibleCount);
-			System.out.println("Duplicates:           " + duplicateCount);
-			System.out.println("Obscene words ignored:" + obsceneCount);
-			System.out.println("Dictionary capacity:  " + dictionary.length);
-			System.out.println("Final clean list:     " + wordSet.size());
-			System.out.println("-----------------------------");
-			if (dictionary.length > wordSet.size()) {
-				System.out.println("   *** WARNING ***    ");
-				System.out.println("Words needed:         "
-						+ (dictionary.length - wordSet.size()));
-			} else {
-				System.out.println("Extra unused words:   "
-						+ (wordSet.size() - dictionary.length));
-			}
-			
-			try ( // write the dictionary
-			BufferedWriter bw = new BufferedWriter(new FileWriter(
-					DICTIONARY_FILE))) {
-				for (String s : wordSet) {
-					bw.write(WordUtils.capitalize(s));
-					bw.write("\n");
-				}
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-
-		} catch (Exception e) {
-			System.err.println("Error: " + e.getMessage());
+			br.close();
+			fstream.close();
+		} catch (IOException e1) {
+			e1.printStackTrace();
 		}
+		return obsceneSet;
 	}
 
 	static class ValueComparator implements Comparator<String> {
@@ -352,7 +370,7 @@ public final class DictionaryGenerator {
 		}
 	}
 
-	public final static void main(String[] args) {
+	public final static void main(String[] args) throws IOException {
 
 		generateWordList();
 		int reloaded = loadDictionary();
