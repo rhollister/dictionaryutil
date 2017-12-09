@@ -29,7 +29,8 @@ Sample words:
      Jumped    Inesdes     Semble   Nicolett    Shottle   Squantum   Bedemans     Tulnic  Copperahs    Zinging
      Tolyls     Narded   Menderes     Tomato     Larosa    Pronaoi   Hydroids       Tyee     Alikee   Dreamery
     Steinem      Adopt    Emprise    Outkeep    Maormor  Spanbauer     Dampen    Hiroshi   Nautches   Saltings
-   Gracindo    Rogalla   Sorbello      Coyer      Plews     Dingly    Unleads    Maclisp   Volantes  Hippiedom```
+   Gracindo    Rogalla   Sorbello      Coyer      Plews     Dingly    Unleads    Maclisp   Volantes  Hippiedom
+   ```
 
 
 ## Sample output from DictionaryMask:
@@ -56,5 +57,6 @@ ff4d616a3d8dbd5843452a7a5330ae6245303bed1450b8470831b80c012b8b2c -> Emulging Cha
 ee80ad9910434ccc25fc4d540c4fcf61478a64e040cac65ae0db815b31339d96 -> Flagman Babyfied 464
 63efd224c60478818eab329b4420747033e4a3d81d5c0f0d970b2c913b3a436  -> Dyeing Agrippa JVM
 9615eccb5e7379d872c4531eb7134740fdc0be6ed8cad520be40a91142e00d21 -> Albespine Evolver N6N
-4b21b09aaf34b0a2d3b460ee00e19d11bb2d10e4f3e20aea03c9405c85433bc1 -> Amli Habitude B93```
+4b21b09aaf34b0a2d3b460ee00e19d11bb2d10e4f3e20aea03c9405c85433bc1 -> Amli Habitude B93
+```
 
